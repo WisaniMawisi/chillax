@@ -1,0 +1,118 @@
+{
+  "brand_identity": {
+    "name": "Chillax",
+    "mission": "To make travel planning as relaxing as the vacation itself.",
+    "tone": "Relaxed, Vibrant, Trustworthy, Exciting",
+    "archetype": "Vibrant Play",
+    "theme_mode": "light"
+  },
+  "typography": {
+    "headings": {
+      "font_family": "Outfit, sans-serif",
+      "weights": ["600", "700"],
+      "usage": "Use for all section headers, hero titles, and card titles. Tight tracking (-0.02em).",
+      "cdn_import": "@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');"
+    },
+    "body": {
+      "font_family": "Inter, sans-serif",
+      "weights": ["400", "500"],
+      "usage": "Use for all paragraph text, inputs, and UI labels. Normal tracking."
+    }
+  },
+  "colors": {
+    "primary": {
+      "name": "Coral Sunset",
+      "hex": "#FF6B6B",
+      "tailwind_class": "bg-[#FF6B6B]",
+      "usage": "Primary CTAs, active states, brand highlights."
+    },
+    "secondary": {
+      "name": "Ocean Teal",
+      "hex": "#4ECDC4",
+      "tailwind_class": "bg-[#4ECDC4]",
+      "usage": "Secondary buttons, success states, illustrations."
+    },
+    "accent": {
+      "name": "Sunny Yellow",
+      "hex": "#FFE66D",
+      "tailwind_class": "bg-[#FFE66D]",
+      "usage": "Badges, highlights, rating stars."
+    },
+    "neutral": {
+      "background": "#F9FAFB",
+      "surface": "#FFFFFF",
+      "text_primary": "#1A1A1A",
+      "text_secondary": "#6B7280",
+      "border": "#E5E7EB"
+    },
+    "gradients": {
+      "hero": "bg-gradient-to-r from-[#FF6B6B] to-[#FF8E53]",
+      "card_hover": "hover:bg-gradient-to-br hover:from-white hover:to-[#FFF5F5]"
+    }
+  },
+  "layout": {
+    "spacing_scale": "Generous. Use p-6, p-8, p-12 for containers. Gap-6 or Gap-8 for grids.",
+    "container_width": "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8",
+    "border_radius": "rounded-2xl",
+    "grids": {
+      "bento_marketing": "grid grid-cols-1 md:grid-cols-12 gap-6",
+      "listing_card": "grid grid-cols-1 md:grid-cols-3 gap-6"
+    }
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-[#FF6B6B] hover:bg-[#FF5252] text-white rounded-full px-8 py-3 font-semibold transition-transform hover:scale-105 active:scale-95 shadow-lg shadow-orange-200",
+      "secondary": "bg-white border-2 border-[#E5E7EB] text-[#1A1A1A] hover:border-[#FF6B6B] hover:text-[#FF6B6B] rounded-full px-6 py-2 font-medium transition-colors",
+      "ghost": "text-[#6B7280] hover:text-[#1A1A1A] hover:bg-gray-100 rounded-lg px-4 py-2"
+    },
+    "cards": {
+      "style": "bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 overflow-hidden",
+      "padding": "p-0 for image sections, p-5 for content"
+    },
+    "inputs": {
+      "style": "bg-gray-50 border-transparent focus:border-[#FF6B6B] focus:ring-2 focus:ring-[#FF6B6B]/20 rounded-xl px-4 py-3 text-lg transition-all"
+    }
+  },
+  "visual_enhancers": {
+    "shadows": {
+      "soft": "shadow-[0_8px_30px_rgb(0,0,0,0.04)]",
+      "hover": "shadow-[0_8px_30px_rgb(0,0,0,0.12)]"
+    },
+    "glassmorphism": "backdrop-blur-md bg-white/80 border border-white/20 shadow-sm",
+    "micro_interactions": "All clickable elements must have hover:scale or hover:brightness effects."
+  },
+  "image_urls": {
+    "hero_background": "https://images.unsplash.com/photo-1731080647322-f9cf691d40ab?crop=entropy&cs=srgb&fm=jpg&q=85",
+    "hotels": [
+      "https://images.unsplash.com/photo-1731080647322-f9cf691d40ab?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "https://images.unsplash.com/photo-1731080647259-879ee314af81?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "https://images.unsplash.com/photo-1731080647266-85cf1bc27162?crop=entropy&cs=srgb&fm=jpg&q=85"
+    ],
+    "flights": [
+      "https://images.unsplash.com/photo-1710028267880-f34d75a5ead6?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "https://images.unsplash.com/photo-1720876439493-6dbf2fcb0b1c?crop=entropy&cs=srgb&fm=jpg&q=85"
+    ],
+    "cars": [
+      "https://images.unsplash.com/photo-1760162754961-ed27f26b394f?crop=entropy&cs=srgb&fm=jpg&q=85"
+    ],
+    "experiences": [
+      "https://images.unsplash.com/photo-1539576776193-2c07122e5fee?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "https://images.unsplash.com/photo-1710443793899-727b425f7eb2?crop=entropy&cs=srgb&fm=jpg&q=85"
+    ],
+    "avatars": [
+      "https://images.unsplash.com/photo-1539576776193-2c07122e5fee?crop=entropy&cs=srgb&fm=jpg&q=85"
+    ]
+  },
+  "universal_guidelines": [
+    "Do not use generic centered layouts. Use asymmetry and bento grids.",
+    "Use 2-3x more spacing than typical designs.",
+    "Every interaction needs micro-animations.",
+    "Use 'sonner' for toasts.",
+    "All interactive elements MUST include data-testid attribute.",
+    "Do not use 'Inter' for headings. Use 'Outfit'.",
+    "Use 'lucide-react' for icons.",
+    "Ensure all images have alt text for accessibility.",
+    "Mobile-first responsive design is mandatory."
+  ],
+  "instructions_to_main_agent": "You are building the 'Chillax' travel app. Follow these guidelines strictly. Use the provided image URLs for their respective sections. Implement the 'Coral Sunset' primary color for main actions. Use Shadcn UI components but customize them with the 'rounded-2xl' and 'border-gray-100' styles to match the brand. Create a 'Layout' component that wraps pages with the standard navbar and footer."
+}
