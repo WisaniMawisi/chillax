@@ -24,6 +24,6 @@ numpy
 python-multipart
 jq
 typer
-emergentintegrations
+
 
 
