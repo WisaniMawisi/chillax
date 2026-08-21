@@ -810,7 +810,16 @@ async def remove_favorite(favorite_id: str, request: Request, session_token: Opt
         raise HTTPException(status_code=404, detail="Favorite not found")
     return {"message": "Removed from favorites"}
 
-# Include router
+# ... imports ...
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# ... app = FastAPI(), api_router, models, routes ...
+
 app.include_router(api_router)
 
 cors_origins = [
@@ -820,7 +829,7 @@ cors_origins = [
 ]
 
 if not cors_origins:
-    cors_origins = ["https://chillaxs.netlify.app"]  # safe fallback
+    cors_origins = ["https://chillaxs.netlify.app"]
 
 app.add_middleware(
     CORSMiddleware,
@@ -831,12 +840,6 @@ app.add_middleware(
 )
 
 logger.info(f"CORS origins loaded: {cors_origins}")
-
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
