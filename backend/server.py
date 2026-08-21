@@ -786,10 +786,12 @@ async def remove_favorite(favorite_id: str, request: Request, session_token: Opt
 # Include router
 app.include_router(api_router)
 
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_origins=["https://chillaxs.netlify.app", "http://localhost:3000"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
