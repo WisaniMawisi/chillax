@@ -819,6 +819,9 @@ cors_origins = [
     if origin.strip()
 ]
 
+if not cors_origins:
+    cors_origins = ["https://chillaxs.netlify.app"]  # safe fallback
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
@@ -826,6 +829,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+logger.info(f"CORS origins loaded: {cors_origins}")
 
 logging.basicConfig(
     level=logging.INFO,
