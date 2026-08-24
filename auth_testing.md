@@ -2,7 +2,7 @@
 
 ## Step 1: Create Test User & Session
 ```bash
-mongosh --eval \"
+mongosh --eval "
 use('test_database');
 var userId = 'test-user-' + Date.now();
 var sessionToken = 'test_session_' + Date.now();
@@ -21,56 +21,56 @@ db.user_sessions.insertOne({
 });
 print('Session token: ' + sessionToken);
 print('User ID: ' + userId);
-\"
+"
 ```
 
 ## Step 2: Test Backend API
 ```bash
 # Test auth endpoint
-curl -X GET \"YOUR_BACKEND_URL/api/auth/me\" \
-  -H \"Authorization: Bearer YOUR_SESSION_TOKEN\"
+curl -X GET "YOUR_BACKEND_URL/api/auth/me" 
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN"
 
 # Test protected endpoints
-curl -X GET \"YOUR_BACKEND_URL/api/bookings\" \
-  -H \"Authorization: Bearer YOUR_SESSION_TOKEN\"
+curl -X GET "YOUR_BACKEND_URL/api/bookings" 
+  -H "Authorization: Bearer YOUR_SESSION_TOKEN"
 ```
 
 ## Step 3: Browser Testing
 ```javascript
 // Set cookie and navigate
 await page.context.add_cookies([{
-    \"name\": \"session_token\",
-    \"value\": \"YOUR_SESSION_TOKEN\",
-    \"domain\": \"your-app.com\",
-    \"path\": \"/\",
-    \"httpOnly\": true,
-    \"secure\": true,
-    \"sameSite\": \"None\"
+    "name": "session_token",
+    "value": "YOUR_SESSION_TOKEN",
+    "domain": "your-app.com",
+    "path": "/",
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
 }]);
-await page.goto(\"https://your-app.com\");
+await page.goto("https://chillax.netlify.app");
 ```
 
 ## Quick Debug
 ```bash
 # Check data format
-mongosh --eval \"
+mongosh --eval "
 use('test_database');
 db.users.find().limit(2).pretty();
 db.user_sessions.find().limit(2).pretty();
-\"
+"
 
 # Clean test data
-mongosh --eval \"
+mongosh --eval "
 use('test_database');
 db.users.deleteMany({email: /test\.user\./});
 db.user_sessions.deleteMany({session_token: /test_session/});
-\"
+"
 ```
 
 ## Checklist
 - User document has user_id field (custom UUID)
 - Session user_id matches user's user_id exactly
-- All queries use `{\"_id\": 0}` projection
+- All queries use `{"_id": 0}` projection
 - Backend queries use user_id
 - API returns user data with user_id field
 - Browser loads dashboard
