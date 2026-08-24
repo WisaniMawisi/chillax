@@ -1,13 +1,22 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Cookie, Request, Response
+from fastapi import (
+    FastAPI,
+    APIRouter,
+    HTTPException,
+    Cookie,
+    Request,
+    Response,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from dotenv import load_dotenv
-from starlette.middleware.cors import CORSMiddleware
+
 from motor.motor_asyncio import AsyncIOMotorClient
+
+from dotenv import load_dotenv
 
 import os
 import logging
 import uuid
+import httpx
 
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
@@ -15,9 +24,6 @@ from typing import List, Optional, Literal
 
 from pydantic import BaseModel, Field, ConfigDict
 from passlib.context import CryptContext
-import httpx
-
-
 
 
 # ============================================================
@@ -41,7 +47,7 @@ if not DB_NAME:
     raise RuntimeError("DB_NAME is not set")
 
 if IS_PRODUCTION and not SECRET_KEY:
-    raise RuntimeError("SECRET_KEY is not set in production")
+    raise RuntimeError("SECRET_KEY is not set")
 
 
 # ============================================================
@@ -58,7 +64,7 @@ db = client[DB_NAME]
 
 pwd_context = CryptContext(
     schemes=["bcrypt"],
-    deprecated="auto"
+    deprecated="auto",
 )
 
 
@@ -66,7 +72,10 @@ pwd_context = CryptContext(
 # APP
 # ============================================================
 
-app = FastAPI()
+app = FastAPI(
+    title="Chillax Travel API",
+    version="1.0.0",
+)
 
 api_router = APIRouter(prefix="/api")
 
@@ -85,51 +94,58 @@ def cookie_settings() -> dict:
         "secure": IS_PRODUCTION,
         "samesite": "none" if IS_PRODUCTION else "lax",
         "max_age": 7 * 24 * 60 * 60,
-        "path": "/"
+        "path": "/",
     }
 
 
 def parse_datetime(value):
-    if isinstance(value, str):
+    if not value:
+        return value
+
+    if isinstance(value, datetime):
+        return value
+
+    try:
         return datetime.fromisoformat(value)
-    return value
+    except Exception:
+        return value
 
 
 async def get_item(
     item_type: str,
-    item_id: str
+    item_id: str,
 ):
     collection_map = {
         "hotel": ("hotels", "hotel_id"),
         "flight": ("flights", "flight_id"),
         "car": ("cars", "car_id"),
-        "experience": ("experiences", "experience_id")
+        "experience": ("experiences", "experience_id"),
     }
 
     if item_type not in collection_map:
         raise HTTPException(
             status_code=400,
-            detail="Invalid item type"
+            detail="Invalid item type",
         )
 
     collection_name, id_field = collection_map[item_type]
 
     item = await db[collection_name].find_one(
         {id_field: item_id},
-        {"_id": 0}
+        {"_id": 0},
     )
 
     if not item:
         raise HTTPException(
             status_code=404,
-            detail=f"{item_type.capitalize()} not found"
+            detail=f"{item_type.capitalize()} not found",
         )
 
     return item
 
 
 # ============================================================
-# MODELS
+# USER MODELS
 # ============================================================
 
 class User(BaseModel):
@@ -159,7 +175,9 @@ class SessionData(BaseModel):
     session_id: str
 
 
-# ================= HOTEL =================
+# ============================================================
+# HOTEL MODELS
+# ============================================================
 
 class Hotel(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -189,7 +207,9 @@ class HotelCreate(BaseModel):
     amenities: List[str] = Field(default_factory=list)
 
 
-# ================= FLIGHT =================
+# ============================================================
+# FLIGHT MODELS
+# ============================================================
 
 class Flight(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -217,7 +237,9 @@ class FlightCreate(BaseModel):
     image_url: str
 
 
-# ================= CAR =================
+# ============================================================
+# CAR MODELS
+# ============================================================
 
 class Car(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -244,7 +266,9 @@ class CarCreate(BaseModel):
     features: List[str] = Field(default_factory=list)
 
 
-# ================= EXPERIENCE =================
+# ============================================================
+# EXPERIENCE MODELS
+# ============================================================
 
 class Experience(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -272,7 +296,9 @@ class ExperienceCreate(BaseModel):
     image_url: str
 
 
-# ================= BOOKING =================
+# ============================================================
+# BOOKING MODELS
+# ============================================================
 
 class Booking(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -284,7 +310,7 @@ class Booking(BaseModel):
         "hotel",
         "flight",
         "car",
-        "experience"
+        "experience",
     ]
 
     item_id: str
@@ -298,13 +324,13 @@ class Booking(BaseModel):
     status: Literal[
         "pending",
         "confirmed",
-        "cancelled"
+        "cancelled",
     ] = "pending"
 
     payment_status: Literal[
         "pending",
         "paid",
-        "refunded"
+        "refunded",
     ] = "pending"
 
     guests: int = Field(default=1, gt=0)
@@ -318,7 +344,7 @@ class BookingCreate(BaseModel):
         "hotel",
         "flight",
         "car",
-        "experience"
+        "experience",
     ]
 
     item_id: str
@@ -329,158 +355,11 @@ class BookingCreate(BaseModel):
     guests: int = Field(default=1, gt=0)
 
 
-# ================= REVIEW =================
+# ============================================================
+# REVIEW MODELS
+# ============================================================
 
 class Review(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    review_id: str
-    user_id: str
-    user_name: str
-
-    item_type: Literal[
-        "hotel",
-        "flight",
-        "car",
-        "experience"
-    ]
-
-    item_id: str
-
-    rating: float = Field(ge=1, le=5)
-    comment: str
-
-    created_at: datetime
-
-
-class ReviewCreate(BaseModel):
-
-    item_type: Literal[
-        "hotel",
-        "flight",
-        "car",
-        "experience"
-    ]
-
-    item_id: str
-
-    rating: float = Field(ge=1, le=5)
-
-    comment: str = Field(min_length=1)
-
-
-# ================= FAVORITE =================
-
-class Favorite(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-
-    favorite_id: str
-    user_id: str
-
-    item_type: Literal[
-        "hotel",
-        "flight",
-        "car",
-        "experience"
-    ]
-
-    item_id: str
-
-    created_at: datetime
-
-
-class FavoriteCreate(BaseModel):
-
-    item_type: Literal[
-        "hotel",
-        "flight",
-        "car",
-        "experience"
-    ]
-
-    item_id: str
-
-
-# ============================================================
-# AUTH HELPER
-# ============================================================
-
-async def get_current_user(
-    request: Request,
-    session_token: Optional[str] = Cookie(None)
-) -> User:
-
-    token = session_token
-
-    # Check Authorization header if cookie does not exist
-    if not token:
-        auth_header = request.headers.get(
-            "Authorization",
-            ""
-        )
-
-        if auth_header.startswith("Bearer "):
-            token = auth_header.split(
-                " ",
-                1
-            )[1]
-
-    if not token:
-        raise HTTPException(
-            status_code=401,
-            detail="Not authenticated"
-        )
-
-    session_doc = await db.user_sessions.find_one(
-        {"session_token": token},
-        {"_id": 0}
-    )
-
-    if not session_doc:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid session"
-        )
-
-    expires_at = parse_datetime(
-        session_doc["expires_at"]
-    )
-
-    if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(
-            tzinfo=timezone.utc
-        )
-
-    if expires_at < now_utc():
-
-        # Remove expired session
-        await db.user_sessions.delete_one(
-            {"session_token": token}
-        )
-
-        raise HTTPException(
-            status_code=401,
-            detail="Session expired"
-        )
-
-    user_doc = await db.users.find_one(
-        {"user_id": session_doc["user_id"]},
-        {"_id": 0}
-    )
-
-    if not user_doc:
-        raise HTTPException(
-            status_code=401,
-            detail="User not found"
-        )
-
-    user_doc["created_at"] = parse_datetime(
-        user_doc["created_at"]
-    )
-
-    return User(**user_doc)
-
-
 # ============================================================
 # AUTH ROUTES
 # ============================================================
@@ -490,13 +369,13 @@ async def register(data: UserRegister):
 
     existing = await db.users.find_one(
         {"email": data.email.lower()},
-        {"_id": 0}
+        {"_id": 0},
     )
 
     if existing:
         raise HTTPException(
             status_code=400,
-            detail="Email already registered"
+            detail="Email already registered",
         )
 
     user_id = f"user_{uuid.uuid4().hex[:12]}"
@@ -505,14 +384,17 @@ async def register(data: UserRegister):
         user_id=user_id,
         email=data.email.lower(),
         name=data.name,
-        password_hash=pwd_context.hash(data.password),
+        password_hash=pwd_context.hash(
+            data.password
+        ),
         is_admin=False,
-        created_at=now_utc()
+        created_at=now_utc(),
     )
 
     user_dict = user.model_dump()
+
     user_dict["created_at"] = (
-        user_dict["created_at"].isoformat()
+        user.created_at.isoformat()
     )
 
     await db.users.insert_one(user_dict)
@@ -521,32 +403,33 @@ async def register(data: UserRegister):
         f"session_{uuid.uuid4().hex}"
     )
 
-    session_doc = {
-        "user_id": user_id,
-        "session_token": session_token,
-        "expires_at": (
-            now_utc() + timedelta(days=7)
-        ).isoformat(),
-        "created_at": now_utc().isoformat()
-    }
-
     await db.user_sessions.insert_one(
-        session_doc
+        {
+            "user_id": user_id,
+            "session_token": session_token,
+            "expires_at": (
+                now_utc() +
+                timedelta(days=7)
+            ).isoformat(),
+            "created_at": (
+                now_utc().isoformat()
+            ),
+        }
     )
 
     response = JSONResponse(
         content={
-            "user_id": user_id,
+            "user_id": user.user_id,
             "email": user.email,
             "name": user.name,
-            "is_admin": user.is_admin
+            "is_admin": user.is_admin,
         }
     )
 
     response.set_cookie(
         key="session_token",
         value=session_token,
-        **cookie_settings()
+        **cookie_settings(),
     )
 
     return response
@@ -555,72 +438,86 @@ async def register(data: UserRegister):
 @api_router.post("/auth/login")
 async def login(data: UserLogin):
 
-    email = data.email.lower()
-
     user_doc = await db.users.find_one(
-        {"email": email},
-        {"_id": 0}
+        {
+            "email":
+            data.email.lower()
+        },
+        {"_id": 0},
     )
 
     if (
         not user_doc
-        or not user_doc.get("password_hash")
+        or
+        not user_doc.get(
+            "password_hash"
+        )
     ):
         raise HTTPException(
             status_code=401,
-            detail="Invalid credentials"
+            detail="Invalid credentials",
         )
 
     if not pwd_context.verify(
         data.password,
-        user_doc["password_hash"]
+        user_doc["password_hash"],
     ):
         raise HTTPException(
             status_code=401,
-            detail="Invalid credentials"
+            detail="Invalid credentials",
         )
 
     session_token = (
         f"session_{uuid.uuid4().hex}"
     )
 
-    session_doc = {
-        "user_id": user_doc["user_id"],
-        "session_token": session_token,
-        "expires_at": (
-            now_utc() + timedelta(days=7)
-        ).isoformat(),
-        "created_at": now_utc().isoformat()
-    }
-
     await db.user_sessions.insert_one(
-        session_doc
+        {
+            "user_id": user_doc["user_id"],
+            "session_token": session_token,
+            "expires_at": (
+                now_utc()
+                + timedelta(days=7)
+            ).isoformat(),
+            "created_at": (
+                now_utc().isoformat()
+            ),
+        }
     )
 
     response = JSONResponse(
         content={
-            "user_id": user_doc["user_id"],
-            "email": user_doc["email"],
-            "name": user_doc["name"],
-            "picture": user_doc.get("picture"),
-            "is_admin": user_doc.get(
-                "is_admin",
-                False
-            )
+            "user_id":
+                user_doc["user_id"],
+            "email":
+                user_doc["email"],
+            "name":
+                user_doc["name"],
+            "picture":
+                user_doc.get(
+                    "picture"
+                ),
+            "is_admin":
+                user_doc.get(
+                    "is_admin",
+                    False,
+                ),
         }
     )
 
     response.set_cookie(
         key="session_token",
         value=session_token,
-        **cookie_settings()
+        **cookie_settings(),
     )
 
     return response
 
 
 @api_router.post("/auth/session")
-async def exchange_session(data: SessionData):
+async def exchange_session(
+    data: SessionData
+):
 
     async with httpx.AsyncClient(
         timeout=20.0
@@ -628,38 +525,53 @@ async def exchange_session(data: SessionData):
 
         try:
 
-            res = await http_client.get(
-                "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
-                headers={
-                    "X-Session-ID": data.session_id
-                }
+            response = await (
+                http_client.get(
+                    "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
+                    headers={
+                        "X-Session-ID":
+                        data.session_id
+                    },
+                )
             )
 
         except httpx.RequestError:
+
             raise HTTPException(
                 status_code=503,
-                detail="Authentication service unavailable"
+                detail=(
+                    "Authentication "
+                    "service unavailable"
+                ),
             )
 
-    if res.status_code != 200:
+    if response.status_code != 200:
+
         raise HTTPException(
             status_code=401,
-            detail="Invalid session_id"
+            detail="Invalid session_id",
         )
 
-    oauth_data = res.json()
+    oauth_data = response.json()
 
-    if not oauth_data.get("email"):
+    email = oauth_data.get(
+        "email",
+        ""
+    ).lower()
+
+    if not email:
+
         raise HTTPException(
             status_code=401,
-            detail="Invalid authentication data"
+            detail=(
+                "Invalid authentication "
+                "data"
+            ),
         )
-
-    email = oauth_data["email"].lower()
 
     user_doc = await db.users.find_one(
         {"email": email},
-        {"_id": 0}
+        {"_id": 0},
     )
 
     if user_doc:
@@ -670,21 +582,24 @@ async def exchange_session(data: SessionData):
             {"user_id": user_id},
             {
                 "$set": {
-                    "name": oauth_data.get(
+                    "name":
+                    oauth_data.get(
                         "name",
-                        user_doc["name"]
+                        user_doc["name"],
                     ),
-                    "picture": oauth_data.get(
+                    "picture":
+                    oauth_data.get(
                         "picture"
-                    )
+                    ),
                 }
-            }
+            },
         )
 
     else:
 
         user_id = (
-            f"user_{uuid.uuid4().hex[:12]}"
+            f"user_"
+            f"{uuid.uuid4().hex[:12]}"
         )
 
         user = User(
@@ -692,70 +607,86 @@ async def exchange_session(data: SessionData):
             email=email,
             name=oauth_data.get(
                 "name",
-                "User"
+                "User",
             ),
-            picture=oauth_data.get("picture"),
+            picture=oauth_data.get(
+                "picture"
+            ),
             is_admin=False,
-            created_at=now_utc()
+            created_at=now_utc(),
         )
 
         user_dict = user.model_dump()
 
         user_dict["created_at"] = (
-            user_dict["created_at"].isoformat()
+            user.created_at.isoformat()
         )
 
         await db.users.insert_one(
             user_dict
         )
 
-    # Use OAuth session token if available
     session_token = oauth_data.get(
         "session_token"
     )
 
     if not session_token:
-        session_token = (
-            f"session_{uuid.uuid4().hex}"
-        )
 
-    session_doc = {
-        "user_id": user_id,
-        "session_token": session_token,
-        "expires_at": (
-            now_utc() + timedelta(days=7)
-        ).isoformat(),
-        "created_at": now_utc().isoformat()
-    }
+        session_token = (
+            f"session_"
+            f"{uuid.uuid4().hex}"
+        )
 
     await db.user_sessions.update_one(
         {"session_token": session_token},
-        {"$set": session_doc},
-        upsert=True
+        {
+            "$set": {
+                "user_id": user_id,
+                "session_token":
+                    session_token,
+                "expires_at": (
+                    now_utc()
+                    + timedelta(days=7)
+                ).isoformat(),
+                "created_at": (
+                    now_utc()
+                    .isoformat()
+                ),
+            }
+        },
+        upsert=True,
     )
 
-    updated_user = await db.users.find_one(
-        {"user_id": user_id},
-        {"_id": 0}
+    updated_user = (
+        await db.users.find_one(
+            {"user_id": user_id},
+            {"_id": 0},
+        )
     )
 
     response = JSONResponse(
         content={
             "user_id": user_id,
-            "email": updated_user["email"],
-            "name": updated_user["name"],
-            "picture": updated_user.get("picture"),
-            "is_admin": updated_user.get(
-                "is_admin",
-                False
-            )
+            "email":
+                updated_user["email"],
+            "name":
+                updated_user["name"],
+            "picture":
+                updated_user.get(
+                    "picture"
+                ),
+            "is_admin":
+                updated_user.get(
+                    "is_admin",
+                    False,
+                ),
         }
     )
 
     response.set_cookie(
         key="session_token",
         value=session_token,
-        **cookie_settings()
+        **cookie_settings(),
     )
 
     return response
@@ -764,12 +695,13 @@ async def exchange_session(data: SessionData):
 @api_router.get("/auth/me")
 async def get_me(
     request: Request,
-    session_token: Optional[str] = Cookie(None)
+    session_token:
+    Optional[str] = Cookie(None),
 ):
 
     user = await get_current_user(
         request,
-        session_token
+        session_token,
     )
 
     return {
@@ -777,15 +709,15 @@ async def get_me(
         "email": user.email,
         "name": user.name,
         "picture": user.picture,
-        "is_admin": user.is_admin
+        "is_admin": user.is_admin,
     }
 
 
 @api_router.post("/auth/logout")
 async def logout(
     request: Request,
-    response: Response,
-    session_token: Optional[str] = Cookie(None)
+    session_token:
+    Optional[str] = Cookie(None),
 ):
 
     token = session_token
@@ -797,10 +729,12 @@ async def logout(
             ""
         )
 
-        if auth_header.startswith("Bearer "):
+        if auth_header.startswith(
+            "Bearer "
+        ):
             token = auth_header.split(
                 " ",
-                1
+                1,
             )[1]
 
     if token:
@@ -808,6 +742,13 @@ async def logout(
         await db.user_sessions.delete_one(
             {"session_token": token}
         )
+
+    response = JSONResponse(
+        {
+            "message":
+            "Logged out"
+        }
+    )
 
     response.delete_cookie(
         key="session_token",
@@ -818,12 +759,10 @@ async def logout(
             "none"
             if IS_PRODUCTION
             else "lax"
-        )
+        ),
     )
 
-    return {
-        "message": "Logged out"
-    }
+    return response
 
 
 # ============================================================
@@ -832,34 +771,42 @@ async def logout(
 
 @api_router.post(
     "/hotels",
-    response_model=Hotel
+    response_model=Hotel,
 )
 async def create_hotel(
     data: HotelCreate,
     request: Request,
-    session_token: Optional[str] = Cookie(None)
+    session_token:
+    Optional[str] = Cookie(None),
 ):
 
     user = await get_current_user(
         request,
-        session_token
+        session_token,
     )
 
     if not user.is_admin:
+
         raise HTTPException(
             status_code=403,
-            detail="Admin access required"
+            detail=(
+                "Admin access required"
+            ),
         )
 
     hotel = Hotel(
-        hotel_id=f"hotel_{uuid.uuid4().hex[:12]}",
+        hotel_id=(
+            f"hotel_"
+            f"{uuid.uuid4().hex[:12]}"
+        ),
         **data.model_dump(),
-        created_at=now_utc()
+        created_at=now_utc(),
     )
 
     hotel_dict = hotel.model_dump()
+
     hotel_dict["created_at"] = (
-        hotel_dict["created_at"].isoformat()
+        hotel.created_at.isoformat()
     )
 
     await db.hotels.insert_one(
@@ -871,22 +818,30 @@ async def create_hotel(
 
 @api_router.get(
     "/hotels",
-    response_model=List[Hotel]
+    response_model=List[Hotel],
 )
 async def get_hotels(
     city: Optional[str] = None,
-    min_price: Optional[float] = None,
-    max_price: Optional[float] = None
+    min_price:
+    Optional[float] = None,
+    max_price:
+    Optional[float] = None,
 ):
 
     if (
         min_price is not None
-        and max_price is not None
-        and min_price > max_price
+        and
+        max_price is not None
+        and
+        min_price > max_price
     ):
         raise HTTPException(
             status_code=400,
-            detail="Minimum price cannot exceed maximum price"
+            detail=(
+                "Minimum price "
+                "cannot exceed "
+                "maximum price"
+            ),
         )
 
     query = {
@@ -894,9 +849,10 @@ async def get_hotels(
     }
 
     if city:
+
         query["city"] = {
             "$regex": city,
-            "$options": "i"
+            "$options": "i",
         }
 
     price_query = {}
@@ -908,16 +864,23 @@ async def get_hotels(
         price_query["$lte"] = max_price
 
     if price_query:
-        query["price_per_night"] = price_query
+        query[
+            "price_per_night"
+        ] = price_query
 
-    hotels = await db.hotels.find(
-        query,
-        {"_id": 0}
-    ).to_list(1000)
+    hotels = (
+        await db.hotels.find(
+            query,
+            {"_id": 0},
+        ).to_list(1000)
+    )
 
     for hotel in hotels:
-        hotel["created_at"] = parse_datetime(
-            hotel["created_at"]
+
+        hotel["created_at"] = (
+            parse_datetime(
+                hotel["created_at"]
+            )
         )
 
     return hotels
@@ -925,110 +888,123 @@ async def get_hotels(
 
 @api_router.get(
     "/hotels/{hotel_id}",
-    response_model=Hotel
+    response_model=Hotel,
 )
-async def get_hotel(hotel_id: str):
+async def get_hotel(
+    hotel_id: str
+):
 
     hotel = await db.hotels.find_one(
         {"hotel_id": hotel_id},
-        {"_id": 0}
+        {"_id": 0},
     )
 
     if not hotel:
+
         raise HTTPException(
             status_code=404,
-            detail="Hotel not found"
+            detail="Hotel not found",
         )
 
-    hotel["created_at"] = parse_datetime(
-        hotel["created_at"]
+    hotel["created_at"] = (
+        parse_datetime(
+            hotel["created_at"]
+        )
     )
 
     return hotel
 
 
-@api_router.delete("/hotels/{hotel_id}")
+@api_router.delete(
+    "/hotels/{hotel_id}"
+)
 async def delete_hotel(
     hotel_id: str,
     request: Request,
-    session_token: Optional[str] = Cookie(None)
+    session_token:
+    Optional[str] = Cookie(None),
 ):
 
     user = await get_current_user(
         request,
-        session_token
+        session_token,
     )
 
     if not user.is_admin:
+
         raise HTTPException(
             status_code=403,
-            detail="Admin access required"
+            detail=(
+                "Admin access required"
+            ),
         )
 
-    result = await db.hotels.delete_one(
-        {"hotel_id": hotel_id}
+    result = (
+        await db.hotels.delete_one(
+            {"hotel_id": hotel_id}
+        )
     )
 
     if result.deleted_count == 0:
+
         raise HTTPException(
             status_code=404,
-            detail="Hotel not found"
+            detail="Hotel not found",
         )
 
     return {
-        "message": "Hotel deleted"
+        "message":
+        "Hotel deleted"
     }
-
-
 # ============================================================
 # FLIGHT ROUTES
 # ============================================================
 
 @api_router.post(
     "/flights",
-    response_model=Flight
+    response_model=Flight,
 )
 async def create_flight(
     data: FlightCreate,
     request: Request,
-    session_token: Optional[str] = Cookie(None)
+    session_token: Optional[str] = Cookie(None),
 ):
 
     user = await get_current_user(
         request,
-        session_token
+        session_token,
     )
 
     if not user.is_admin:
         raise HTTPException(
             status_code=403,
-            detail="Admin access required"
+            detail="Admin access required",
         )
 
     if data.arrival_time <= data.departure_time:
         raise HTTPException(
             status_code=400,
-            detail="Arrival time must be after departure time"
+            detail="Arrival time must be after departure time",
         )
 
     flight = Flight(
         flight_id=f"flight_{uuid.uuid4().hex[:12]}",
         **data.model_dump(),
-        created_at=now_utc()
+        created_at=now_utc(),
     )
 
     flight_dict = flight.model_dump()
 
     flight_dict["departure_time"] = (
-        flight_dict["departure_time"].isoformat()
+        flight.departure_time.isoformat()
     )
 
     flight_dict["arrival_time"] = (
-        flight_dict["arrival_time"].isoformat()
+        flight.arrival_time.isoformat()
     )
 
     flight_dict["created_at"] = (
-        flight_dict["created_at"].isoformat()
+        flight.created_at.isoformat()
     )
 
     await db.flights.insert_one(
@@ -1040,11 +1016,11 @@ async def create_flight(
 
 @api_router.get(
     "/flights",
-    response_model=List[Flight]
+    response_model=List[Flight],
 )
 async def get_flights(
     from_city: Optional[str] = None,
-    to_city: Optional[str] = None
+    to_city: Optional[str] = None,
 ):
 
     query = {
@@ -1056,18 +1032,18 @@ async def get_flights(
     if from_city:
         query["from_city"] = {
             "$regex": from_city,
-            "$options": "i"
+            "$options": "i",
         }
 
     if to_city:
         query["to_city"] = {
             "$regex": to_city,
-            "$options": "i"
+            "$options": "i",
         }
 
     flights = await db.flights.find(
         query,
-        {"_id": 0}
+        {"_id": 0},
     ).to_list(1000)
 
     for flight in flights:
@@ -1095,19 +1071,21 @@ async def get_flights(
 
 @api_router.get(
     "/flights/{flight_id}",
-    response_model=Flight
+    response_model=Flight,
 )
-async def get_flight(flight_id: str):
+async def get_flight(
+    flight_id: str,
+):
 
     flight = await db.flights.find_one(
         {"flight_id": flight_id},
-        {"_id": 0}
+        {"_id": 0},
     )
 
     if not flight:
         raise HTTPException(
             status_code=404,
-            detail="Flight not found"
+            detail="Flight not found",
         )
 
     flight["departure_time"] = parse_datetime(
@@ -1125,22 +1103,24 @@ async def get_flight(flight_id: str):
     return flight
 
 
-@api_router.delete("/flights/{flight_id}")
+@api_router.delete(
+    "/flights/{flight_id}"
+)
 async def delete_flight(
     flight_id: str,
     request: Request,
-    session_token: Optional[str] = Cookie(None)
+    session_token: Optional[str] = Cookie(None),
 ):
 
     user = await get_current_user(
         request,
-        session_token
+        session_token,
     )
 
     if not user.is_admin:
         raise HTTPException(
             status_code=403,
-            detail="Admin access required"
+            detail="Admin access required",
         )
 
     result = await db.flights.delete_one(
@@ -1150,7 +1130,7 @@ async def delete_flight(
     if result.deleted_count == 0:
         raise HTTPException(
             status_code=404,
-            detail="Flight not found"
+            detail="Flight not found",
         )
 
     return {
@@ -1164,48 +1144,50 @@ async def delete_flight(
 
 @api_router.post(
     "/cars",
-    response_model=Car
+    response_model=Car,
 )
 async def create_car(
     data: CarCreate,
     request: Request,
-    session_token: Optional[str] = Cookie(None)
+    session_token: Optional[str] = Cookie(None),
 ):
 
     user = await get_current_user(
         request,
-        session_token
+        session_token,
     )
 
     if not user.is_admin:
         raise HTTPException(
             status_code=403,
-            detail="Admin access required"
+            detail="Admin access required",
         )
 
     car = Car(
         car_id=f"car_{uuid.uuid4().hex[:12]}",
         **data.model_dump(),
-        created_at=now_utc()
+        created_at=now_utc(),
     )
 
     car_dict = car.model_dump()
 
     car_dict["created_at"] = (
-        car_dict["created_at"].isoformat()
+        car.created_at.isoformat()
     )
 
-    await db.cars.insert_one(car_dict)
+    await db.cars.insert_one(
+        car_dict
+    )
 
     return car
 
 
 @api_router.get(
     "/cars",
-    response_model=List[Car]
+    response_model=List[Car],
 )
 async def get_cars(
-    city: Optional[str] = None
+    city: Optional[str] = None,
 ):
 
     query = {
@@ -1215,12 +1197,12 @@ async def get_cars(
     if city:
         query["city"] = {
             "$regex": city,
-            "$options": "i"
+            "$options": "i",
         }
 
     cars = await db.cars.find(
         query,
-        {"_id": 0}
+        {"_id": 0},
     ).to_list(1000)
 
     for car in cars:
@@ -1233,19 +1215,21 @@ async def get_cars(
 
 @api_router.get(
     "/cars/{car_id}",
-    response_model=Car
+    response_model=Car,
 )
-async def get_car(car_id: str):
+async def get_car(
+    car_id: str,
+):
 
     car = await db.cars.find_one(
         {"car_id": car_id},
-        {"_id": 0}
+        {"_id": 0},
     )
 
     if not car:
         raise HTTPException(
             status_code=404,
-            detail="Car not found"
+            detail="Car not found",
         )
 
     car["created_at"] = parse_datetime(
@@ -1255,22 +1239,24 @@ async def get_car(car_id: str):
     return car
 
 
-@api_router.delete("/cars/{car_id}")
+@api_router.delete(
+    "/cars/{car_id}"
+)
 async def delete_car(
     car_id: str,
     request: Request,
-    session_token: Optional[str] = Cookie(None)
+    session_token: Optional[str] = Cookie(None),
 ):
 
     user = await get_current_user(
         request,
-        session_token
+        session_token,
     )
 
     if not user.is_admin:
         raise HTTPException(
             status_code=403,
-            detail="Admin access required"
+            detail="Admin access required",
         )
 
     result = await db.cars.delete_one(
@@ -1280,7 +1266,7 @@ async def delete_car(
     if result.deleted_count == 0:
         raise HTTPException(
             status_code=404,
-            detail="Car not found"
+            detail="Car not found",
         )
 
     return {
@@ -1294,35 +1280,37 @@ async def delete_car(
 
 @api_router.post(
     "/experiences",
-    response_model=Experience
+    response_model=Experience,
 )
 async def create_experience(
     data: ExperienceCreate,
     request: Request,
-    session_token: Optional[str] = Cookie(None)
+    session_token: Optional[str] = Cookie(None),
 ):
 
     user = await get_current_user(
         request,
-        session_token
+        session_token,
     )
 
     if not user.is_admin:
         raise HTTPException(
             status_code=403,
-            detail="Admin access required"
+            detail="Admin access required",
         )
 
     experience = Experience(
         experience_id=f"exp_{uuid.uuid4().hex[:12]}",
         **data.model_dump(),
-        created_at=now_utc()
+        created_at=now_utc(),
     )
 
-    experience_dict = experience.model_dump()
+    experience_dict = (
+        experience.model_dump()
+    )
 
     experience_dict["created_at"] = (
-        experience_dict["created_at"].isoformat()
+        experience.created_at.isoformat()
     )
 
     await db.experiences.insert_one(
@@ -1334,10 +1322,10 @@ async def create_experience(
 
 @api_router.get(
     "/experiences",
-    response_model=List[Experience]
+    response_model=List[Experience],
 )
 async def get_experiences(
-    city: Optional[str] = None
+    city: Optional[str] = None,
 ):
 
     query = {
@@ -1347,15 +1335,18 @@ async def get_experiences(
     if city:
         query["city"] = {
             "$regex": city,
-            "$options": "i"
+            "$options": "i",
         }
 
-    experiences = await db.experiences.find(
-        query,
-        {"_id": 0}
-    ).to_list(1000)
+    experiences = (
+        await db.experiences.find(
+            query,
+            {"_id": 0},
+        ).to_list(1000)
+    )
 
     for experience in experiences:
+
         experience["created_at"] = (
             parse_datetime(
                 experience["created_at"]
@@ -1367,25 +1358,32 @@ async def get_experiences(
 
 @api_router.get(
     "/experiences/{experience_id}",
-    response_model=Experience
+    response_model=Experience,
 )
 async def get_experience(
-    experience_id: str
+    experience_id: str,
 ):
 
-    experience = await db.experiences.find_one(
-        {"experience_id": experience_id},
-        {"_id": 0}
+    experience = (
+        await db.experiences.find_one(
+            {
+                "experience_id":
+                experience_id
+            },
+            {"_id": 0},
+        )
     )
 
     if not experience:
         raise HTTPException(
             status_code=404,
-            detail="Experience not found"
+            detail="Experience not found",
         )
 
-    experience["created_at"] = parse_datetime(
-        experience["created_at"]
+    experience["created_at"] = (
+        parse_datetime(
+            experience["created_at"]
+        )
     )
 
     return experience
@@ -1397,192 +1395,177 @@ async def get_experience(
 async def delete_experience(
     experience_id: str,
     request: Request,
-    session_token: Optional[str] = Cookie(None)
+    session_token: Optional[str] = Cookie(None),
 ):
 
     user = await get_current_user(
         request,
-        session_token
+        session_token,
     )
 
     if not user.is_admin:
         raise HTTPException(
             status_code=403,
-            detail="Admin access required"
+            detail="Admin access required",
         )
 
-    result = await db.experiences.delete_one(
-        {"experience_id": experience_id}
+    result = (
+        await db.experiences.delete_one(
+            {
+                "experience_id":
+                experience_id
+            }
+        )
     )
 
     if result.deleted_count == 0:
         raise HTTPException(
             status_code=404,
-            detail="Experience not found"
+            detail="Experience not found",
         )
 
     return {
-        "message": "Experience deleted"
+        "message":
+        "Experience deleted"
     }
-
-
 # ============================================================
 # BOOKING ROUTES
 # ============================================================
 
 @api_router.post(
     "/bookings",
-    response_model=Booking
+    response_model=Booking,
 )
 async def create_booking(
     data: BookingCreate,
     request: Request,
-    session_token: Optional[str] = Cookie(None)
+    session_token: Optional[str] = Cookie(None),
 ):
 
     user = await get_current_user(
         request,
-        session_token
+        session_token,
     )
-
-    # --------------------------------------------------------
-    # Validate hotel and car dates
-    # --------------------------------------------------------
 
     days = 1
 
-    if data.booking_type in [
-        "hotel",
-        "car"
-    ]:
+    if data.booking_type in ["hotel", "car"]:
 
         if not data.end_date:
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    "End date is required for "
+                    "End date required for "
                     "hotel and car bookings"
-                )
+                ),
             )
 
         days = (
-            data.end_date - data.start_date
+            data.end_date -
+            data.start_date
         ).days
 
         if days <= 0:
             raise HTTPException(
                 status_code=400,
-                detail=(
-                    "End date must be after "
-                    "start date"
-                )
+                detail="Invalid booking dates",
             )
 
     item_name = ""
     total_price = 0.0
 
-    # --------------------------------------------------------
     # HOTEL
-    # --------------------------------------------------------
 
     if data.booking_type == "hotel":
 
         item = await db.hotels.find_one(
             {
                 "hotel_id": data.item_id,
-                "available": True
+                "available": True,
             },
-            {"_id": 0}
+            {"_id": 0},
         )
 
         if not item:
             raise HTTPException(
                 status_code=404,
-                detail=(
-                    "Hotel not found or unavailable"
-                )
+                detail="Hotel unavailable",
             )
 
         item_name = item["name"]
 
         total_price = (
-            item["price_per_night"]
-            * days
+            item["price_per_night"] *
+            days
         )
 
-    # --------------------------------------------------------
     # FLIGHT
-    # --------------------------------------------------------
 
     elif data.booking_type == "flight":
 
-        # Atomically reserve seats
-        result = await db.flights.update_one(
-            {
-                "flight_id": data.item_id,
-                "available_seats": {
-                    "$gte": data.guests
-                }
-            },
-            {
-                "$inc": {
-                    "available_seats": (
+        result = (
+            await db.flights.update_one(
+                {
+                    "flight_id":
+                    data.item_id,
+                    "available_seats": {
+                        "$gte":
+                        data.guests
+                    },
+                },
+                {
+                    "$inc": {
+                        "available_seats":
                         -data.guests
-                    )
-                }
-            }
+                    }
+                },
+            )
         )
 
         if result.modified_count == 0:
             raise HTTPException(
                 status_code=400,
-                detail=(
-                    "Flight not found or "
-                    "not enough seats available"
-                )
+                detail="Not enough seats",
             )
 
-        item = await db.flights.find_one(
-            {"flight_id": data.item_id},
-            {"_id": 0}
+        item = (
+            await db.flights.find_one(
+                {
+                    "flight_id":
+                    data.item_id
+                },
+                {"_id": 0},
+            )
         )
-
-        if not item:
-            raise HTTPException(
-                status_code=404,
-                detail="Flight not found"
-            )
 
         item_name = (
             f"{item['from_city']} "
-            f"to {item['to_city']}"
+            f"to "
+            f"{item['to_city']}"
         )
 
         total_price = (
-            item["price"]
-            * data.guests
+            item["price"] *
+            data.guests
         )
 
-    # --------------------------------------------------------
     # CAR
-    # --------------------------------------------------------
 
     elif data.booking_type == "car":
 
         item = await db.cars.find_one(
             {
-                "car_id": data.item_id,
-                "available": True
+                "car_id":
+                data.item_id,
+                "available": True,
             },
-            {"_id": 0}
+            {"_id": 0},
         )
 
         if not item:
             raise HTTPException(
                 status_code=404,
-                detail=(
-                    "Car not found or unavailable"
-                )
+                detail="Car unavailable",
             )
 
         item_name = (
@@ -1591,128 +1574,98 @@ async def create_booking(
         )
 
         total_price = (
-            item["price_per_day"]
-            * days
+            item["price_per_day"] *
+            days
         )
 
-    # --------------------------------------------------------
     # EXPERIENCE
-    # --------------------------------------------------------
 
     elif data.booking_type == "experience":
 
-        item = await db.experiences.find_one(
-            {
-                "experience_id": data.item_id,
-                "available": True
-            },
-            {"_id": 0}
+        item = (
+            await db.experiences.find_one(
+                {
+                    "experience_id":
+                    data.item_id,
+                    "available": True,
+                },
+                {"_id": 0},
+            )
         )
 
         if not item:
             raise HTTPException(
                 status_code=404,
-                detail=(
-                    "Experience not found "
-                    "or unavailable"
-                )
+                detail="Experience unavailable",
             )
 
         item_name = item["title"]
 
         total_price = (
-            item["price"]
-            * data.guests
+            item["price"] *
+            data.guests
         )
-
-    # --------------------------------------------------------
-    # CREATE BOOKING
-    # --------------------------------------------------------
 
     booking = Booking(
         booking_id=(
-            f"booking_{uuid.uuid4().hex[:12]}"
+            f"booking_"
+            f"{uuid.uuid4().hex[:12]}"
         ),
         user_id=user.user_id,
         item_name=item_name,
         total_price=round(
             total_price,
-            2
+            2,
         ),
         **data.model_dump(),
-        created_at=now_utc()
+        created_at=now_utc(),
     )
 
     booking_dict = booking.model_dump()
 
     booking_dict["start_date"] = (
-        booking_dict["start_date"].isoformat()
+        booking.start_date.isoformat()
     )
 
-    if booking_dict.get("end_date"):
+    if booking.end_date:
         booking_dict["end_date"] = (
-            booking_dict["end_date"].isoformat()
+            booking.end_date.isoformat()
         )
 
     booking_dict["created_at"] = (
-        booking_dict["created_at"].isoformat()
+        booking.created_at.isoformat()
     )
 
-    try:
-
-        await db.bookings.insert_one(
-            booking_dict
-        )
-
-    except Exception as error:
-
-        # Return seats if booking creation fails
-        if data.booking_type == "flight":
-
-            await db.flights.update_one(
-                {"flight_id": data.item_id},
-                {
-                    "$inc": {
-                        "available_seats": (
-                            data.guests
-                        )
-                    }
-                }
-            )
-
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to create booking"
-        ) from error
+    await db.bookings.insert_one(
+        booking_dict
+    )
 
     return booking
 
 
 @api_router.get(
     "/bookings",
-    response_model=List[Booking]
+    response_model=List[Booking],
 )
 async def get_bookings(
     request: Request,
-    session_token: Optional[str] = Cookie(None)
+    session_token: Optional[str] = Cookie(None),
 ):
 
     user = await get_current_user(
         request,
-        session_token
+        session_token,
     )
 
     query = (
         {}
         if user.is_admin
-        else {
-            "user_id": user.user_id
-        }
+        else {"user_id": user.user_id}
     )
 
     bookings = await db.bookings.find(
         query,
-        {"_id": 0}
+        {"_id": 0},
     ).to_list(1000)
 
     for booking in bookings:
@@ -1739,161 +1692,49 @@ async def get_bookings(
     return bookings
 
 
-@api_router.patch(
-    "/bookings/{booking_id}/cancel"
-)
-async def cancel_booking(
-    booking_id: str,
-    request: Request,
-    session_token: Optional[str] = Cookie(None)
-):
-
-    user = await get_current_user(
-        request,
-        session_token
-    )
-
-    booking = await db.bookings.find_one(
-        {"booking_id": booking_id},
-        {"_id": 0}
-    )
-
-    if not booking:
-        raise HTTPException(
-            status_code=404,
-            detail="Booking not found"
-        )
-
-    if (
-        booking["user_id"] != user.user_id
-        and not user.is_admin
-    ):
-        raise HTTPException(
-            status_code=403,
-            detail="Not authorized"
-        )
-
-    if booking["status"] == "cancelled":
-        raise HTTPException(
-            status_code=400,
-            detail="Booking already cancelled"
-        )
-
-    # Return flight seats when cancelling
-    if booking["booking_type"] == "flight":
-
-        await db.flights.update_one(
-            {
-                "flight_id": booking["item_id"]
-            },
-            {
-                "$inc": {
-                    "available_seats": (
-                        booking.get("guests", 1)
-                    )
-                }
-            }
-        )
-
-    await db.bookings.update_one(
-        {"booking_id": booking_id},
-        {
-            "$set": {
-                "status": "cancelled"
-            }
-        }
-    )
-
-    return {
-        "message": "Booking cancelled"
-    }
-
-
 # ============================================================
 # REVIEW ROUTES
 # ============================================================
 
 @api_router.post(
     "/reviews",
-    response_model=Review
+    response_model=Review,
 )
 async def create_review(
     data: ReviewCreate,
     request: Request,
-    session_token: Optional[str] = Cookie(None)
+    session_token: Optional[str] = Cookie(None),
 ):
 
     user = await get_current_user(
         request,
-        session_token
+        session_token,
     )
 
-    # Check item exists
     await get_item(
         data.item_type,
-        data.item_id
+        data.item_id,
     )
 
     review = Review(
         review_id=(
-            f"review_{uuid.uuid4().hex[:12]}"
+            f"review_"
+            f"{uuid.uuid4().hex[:12]}"
         ),
         user_id=user.user_id,
         user_name=user.name,
         **data.model_dump(),
-        created_at=now_utc()
+        created_at=now_utc(),
     )
 
     review_dict = review.model_dump()
 
     review_dict["created_at"] = (
-        review_dict["created_at"].isoformat()
+        review.created_at.isoformat()
     )
 
     await db.reviews.insert_one(
         review_dict
-    )
-
-    collection_map = {
-        "hotel": ("hotels", "hotel_id"),
-        "flight": ("flights", "flight_id"),
-        "car": ("cars", "car_id"),
-        "experience": (
-            "experiences",
-            "experience_id"
-        )
-    }
-
-    collection_name, id_field = (
-        collection_map[data.item_type]
-    )
-
-    reviews = await db.reviews.find(
-        {
-            "item_type": data.item_type,
-            "item_id": data.item_id
-        },
-        {"_id": 0}
-    ).to_list(1000)
-
-    avg_rating = (
-        sum(
-            review_data["rating"]
-            for review_data in reviews
-        )
-        / len(reviews)
-    )
-
-    await db[collection_name].update_one(
-        {id_field: data.item_id},
-        {
-            "$set": {
-                "rating": round(
-                    avg_rating,
-                    1
-                )
-            }
-        }
     )
 
     return review
@@ -1901,87 +1742,86 @@ async def create_review(
 
 @api_router.get(
     "/reviews/{item_type}/{item_id}",
-    response_model=List[Review]
+    response_model=List[Review],
 )
 async def get_reviews(
-    item_type: Literal[
-        "hotel",
-        "flight",
-        "car",
-        "experience"
-    ],
-    item_id: str
+    item_type: str,
+    item_id: str,
 ):
 
     reviews = await db.reviews.find(
         {
             "item_type": item_type,
-            "item_id": item_id
+            "item_id": item_id,
         },
-        {"_id": 0}
+        {"_id": 0},
     ).to_list(1000)
 
     for review in reviews:
-        review["created_at"] = parse_datetime(
-            review["created_at"]
+
+        review["created_at"] = (
+            parse_datetime(
+                review["created_at"]
+            )
         )
 
     return reviews
 
 
 # ============================================================
-# FAVORITE ROUTES
+# FAVORITES
 # ============================================================
 
 @api_router.post(
     "/favorites",
-    response_model=Favorite
+    response_model=Favorite,
 )
 async def add_favorite(
     data: FavoriteCreate,
     request: Request,
-    session_token: Optional[str] = Cookie(None)
+    session_token: Optional[str] = Cookie(None),
 ):
 
     user = await get_current_user(
         request,
-        session_token
+        session_token,
     )
 
-    # Check item exists
-    await get_item(
-        data.item_type,
-        data.item_id
-    )
-
-    existing = await db.favorites.find_one(
-        {
-            "user_id": user.user_id,
-            "item_type": data.item_type,
-            "item_id": data.item_id
-        },
-        {"_id": 0}
+    existing = (
+        await db.favorites.find_one(
+            {
+                "user_id":
+                user.user_id,
+                "item_type":
+                data.item_type,
+                "item_id":
+                data.item_id,
+            }
+        )
     )
 
     if existing:
         raise HTTPException(
             status_code=400,
-            detail="Already in favorites"
+            detail="Already favorite",
         )
 
     favorite = Favorite(
         favorite_id=(
-            f"fav_{uuid.uuid4().hex[:12]}"
+            f"fav_"
+            f"{uuid.uuid4().hex[:12]}"
         ),
         user_id=user.user_id,
         **data.model_dump(),
-        created_at=now_utc()
+        created_at=now_utc(),
     )
 
-    favorite_dict = favorite.model_dump()
+    favorite_dict = (
+        favorite.model_dump()
+    )
 
     favorite_dict["created_at"] = (
-        favorite_dict["created_at"].isoformat()
+        favorite.created_at.isoformat()
     )
 
     await db.favorites.insert_one(
@@ -1993,28 +1833,34 @@ async def add_favorite(
 
 @api_router.get(
     "/favorites",
-    response_model=List[Favorite]
+    response_model=List[Favorite],
 )
 async def get_favorites(
     request: Request,
-    session_token: Optional[str] = Cookie(None)
+    session_token: Optional[str] = Cookie(None),
 ):
 
     user = await get_current_user(
         request,
-        session_token
+        session_token,
     )
 
-    favorites = await db.favorites.find(
-        {
-            "user_id": user.user_id
-        },
-        {"_id": 0}
-    ).to_list(1000)
+    favorites = (
+        await db.favorites.find(
+            {
+                "user_id":
+                user.user_id
+            },
+            {"_id": 0},
+        ).to_list(1000)
+    )
 
     for favorite in favorites:
-        favorite["created_at"] = parse_datetime(
-            favorite["created_at"]
+
+        favorite["created_at"] = (
+            parse_datetime(
+                favorite["created_at"]
+            )
         )
 
     return favorites
@@ -2026,29 +1872,46 @@ async def get_favorites(
 async def remove_favorite(
     favorite_id: str,
     request: Request,
-    session_token: Optional[str] = Cookie(None)
+    session_token: Optional[str] = Cookie(None),
 ):
 
     user = await get_current_user(
         request,
-        session_token
+        session_token,
     )
 
-    result = await db.favorites.delete_one(
-        {
-            "favorite_id": favorite_id,
-            "user_id": user.user_id
-        }
+    result = (
+        await db.favorites.delete_one(
+            {
+                "favorite_id":
+                favorite_id,
+                "user_id":
+                user.user_id,
+            }
+        )
     )
 
     if result.deleted_count == 0:
         raise HTTPException(
             status_code=404,
-            detail="Favorite not found"
+            detail="Favorite not found",
         )
 
     return {
-        "message": "Removed from favorites"
+        "message":
+        "Favorite removed"
+    }
+
+
+# ============================================================
+# ROOT
+# ============================================================
+
+@app.get("/")
+async def root():
+    return {
+        "status": "ok",
+        "service": "Chillax Travel API",
     }
 
 
@@ -2063,13 +1926,18 @@ allowed_origins = [
     "http://localhost:5173",
 ]
 
-extra_origins = os.getenv("CORS_ORIGINS", "")
+extra_origins = os.getenv(
+    "CORS_ORIGINS",
+    "",
+)
 
 if extra_origins:
+
     allowed_origins.extend(
         [
             origin.strip()
-            for origin in extra_origins.split(",")
+            for origin
+            in extra_origins.split(",")
             if origin.strip()
         ]
     )
@@ -2084,10 +1952,56 @@ app.add_middleware(
 
 
 # ============================================================
-# API ROUTES
+# STARTUP
 # ============================================================
 
-app.include_router(api_router)
+@app.on_event("startup")
+async def create_indexes():
+
+    await db.users.create_index(
+        "email",
+        unique=True,
+    )
+
+    await db.user_sessions.create_index(
+        "session_token",
+        unique=True,
+    )
+
+    await db.bookings.create_index(
+        "booking_id",
+        unique=True,
+    )
+
+    await db.hotels.create_index(
+        "hotel_id",
+        unique=True,
+    )
+
+    await db.flights.create_index(
+        "flight_id",
+        unique=True,
+    )
+
+    await db.cars.create_index(
+        "car_id",
+        unique=True,
+    )
+
+    await db.experiences.create_index(
+        "experience_id",
+        unique=True,
+    )
+
+
+# ============================================================
+# ROUTER
+# ============================================================
+
+app.include_router(
+    api_router
+)
+
 
 # ============================================================
 # LOGGING
@@ -2100,10 +2014,12 @@ logging.basicConfig(
         "%(name)s - "
         "%(levelname)s - "
         "%(message)s"
-    )
+    ),
 )
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(
+    __name__
+)
 
 
 # ============================================================
@@ -2112,5 +2028,9 @@ logger = logging.getLogger(__name__)
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
+
+    logger.info(
+        "Closing MongoDB connection"
+    )
 
     client.close()
