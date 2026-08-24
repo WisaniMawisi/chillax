@@ -1,4 +1,5 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Cookie, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -15,6 +16,8 @@ from typing import List, Optional, Literal
 from pydantic import BaseModel, Field, ConfigDict
 from passlib.context import CryptContext
 import httpx
+
+
 
 
 # ============================================================
@@ -2050,29 +2053,19 @@ async def remove_favorite(
 
 
 # ============================================================
-# INCLUDE API ROUTER
-# ============================================================
-
-app.include_router(api_router)
-
-
-# ============================================================
 # CORS
 # ============================================================
 
 allowed_origins = [
     "https://chillaxs.netlify.app",
+    "https://chillax-po8w.onrender.com",
     "http://localhost:3000",
-    "http://localhost:5173"
+    "http://localhost:5173",
 ]
 
-extra_origins = os.getenv(
-    "CORS_ORIGINS",
-    ""
-)
+extra_origins = os.getenv("CORS_ORIGINS", "")
 
 if extra_origins:
-
     allowed_origins.extend(
         [
             origin.strip()
@@ -2083,12 +2076,18 @@ if extra_origins:
 
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
     allow_origins=allowed_origins,
+    allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"]
+    allow_headers=["*"],
 )
 
+
+# ============================================================
+# API ROUTES
+# ============================================================
+
+app.include_router(api_router)
 
 # ============================================================
 # LOGGING
