@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { API } from '../App';
 import { useAuth } from '../App';
+import { setStoredToken } from '../App';
 
 function AuthCallback() {
   const navigate = useNavigate();
@@ -32,6 +33,7 @@ function AuthCallback() {
           { withCredentials: true }
         );
 
+        setStoredToken(response.data.access_token);
         setUser(response.data);
         navigate('/dashboard', { replace: true, state: { user: response.data } });
       } catch (error) {

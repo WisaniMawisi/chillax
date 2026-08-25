@@ -1113,6 +1113,10 @@ async def register(
                 user.name,
             "is_admin":
                 user.is_admin,
+            "access_token":
+                token,
+            "token_type":
+                "bearer",
         }
     )
 
@@ -1211,6 +1215,10 @@ async def login(
                     "is_admin",
                     False,
                 ),
+            "access_token":
+                token,
+            "token_type":
+                "bearer",
         }
     )
 
@@ -1393,6 +1401,10 @@ async def exchange_session(
                     "is_admin",
                     False,
                 ),
+            "access_token":
+                token,
+            "token_type":
+                "bearer",
         }
     )
 

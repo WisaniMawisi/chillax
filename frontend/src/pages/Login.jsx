@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { API } from '../App';
 import { useAuth } from '../App';
+import { setStoredToken } from '../App'; 
 import Layout from '../components/Layout';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -17,7 +18,7 @@ function Login() {
   const navigate = useNavigate();
   const { setUser } = useAuth();
 
-  const handleLogin = async (e) => {
+   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
 
@@ -27,6 +28,7 @@ function Login() {
         { email, password },
         { withCredentials: true }
       );
+      setStoredToken(response.data.access_token);   // add this line
       setUser(response.data);
       toast.success('Welcome back!');
       navigate('/dashboard');

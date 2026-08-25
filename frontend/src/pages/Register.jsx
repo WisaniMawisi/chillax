@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { API } from '../App';
 import { useAuth } from '../App';
+import { setStoredToken } from '../App';
 import Layout from '../components/Layout';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -28,6 +29,7 @@ function Register() {
         { name, email, password },
         { withCredentials: true }
       );
+      setStoredToken(response.data.access_token);
       setUser(response.data);
       toast.success('Account created successfully!');
       navigate('/dashboard');
