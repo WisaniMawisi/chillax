@@ -34,11 +34,11 @@ const API = `${BACKEND_URL}/api`;
 // work without any of this).
 const TOKEN_STORAGE_KEY = 'chillax_access_token';
 
-export function getStoredToken() {
+function getStoredToken() {
   return localStorage.getItem(TOKEN_STORAGE_KEY);
 }
 
-export function setStoredToken(token) {
+function setStoredToken(token) {
   if (token) {
     localStorage.setItem(TOKEN_STORAGE_KEY, token);
   } else {
@@ -123,3 +123,88 @@ function AuthProvider({ children }) {
     </AuthContext.Provider>
   );
 }
+
+function ProtectedRoute({ children, adminOnly = false }) {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-xl text-gray-600">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  if (adminOnly && !user.is_admin) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return children;
+}
+
+function AppRouter() {
+  const location = useLocation();
+
+  // Check URL fragment for session_id during render (prevents race conditions)
+  if (location.hash?.includes('session_id=')) {
+    return <AuthCallback />;
+  }
+
+  return (
+    <Routes>
+      <Route path="/" element={<Landing />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
+      <Route path="/search" element={<SearchResults />} />
+      <Route path="/hotels/:id" element={<HotelDetail />} />
+      <Route path="/flights/:id" element={<FlightDetail />} />
+      <Route path="/cars/:id" element={<CarDetail />} />
+      <Route path="/experiences/:id" element={<ExperienceDetail />} />
+      <Route
+        path="/booking/:type/:id"
+        element={
+          <ProtectedRoute>
+            <Booking />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute>
+            <UserDashboard />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin"
+        element={
+          <ProtectedRoute adminOnly>
+            <AdminDashboard />
+          </ProtectedRoute>
+        }
+      />
+    </Routes>
+  );
+}
+
+function App() {
+  return (
+    <div className="App">
+      <BrowserRouter>
+        <AuthProvider>
+          <AppRouter />
+          <Toaster position="top-right" richColors />
+        </AuthProvider>
+      </BrowserRouter>
+    </div>
+  );
+}
+
+export default App;
+export { API, BACKEND_URL, getStoredToken, setStoredToken };
