@@ -1042,19 +1042,30 @@ async def register(
             status_code=400,
             detail="Email already registered",
         )
-
+    
     user_id = (
         f"user_"
         f"{uuid.uuid4().hex[:12]}"
     )
 
+    try:
+        password_hash = pwd_context.hash(
+            data.password
+        )
+    except Exception:
+        logger.exception(
+            "Password hashing failed"
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="Registration failed",
+        )
+
     user = User(
         user_id=user_id,
         email=email,
         name=data.name.strip(),
-        password_hash=pwd_context.hash(
-            data.password
-        ),
+        password_hash=password_hash,
         is_admin=False,
         created_at=now_utc(),
     )
